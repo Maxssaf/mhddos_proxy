@@ -2,7 +2,7 @@ from pathlib import Path
 
 import requests
 
-from core import logger, cl
+from .core import logger, cl
 
 
 class Targets:
@@ -32,7 +32,7 @@ class Targets:
         if not self.config:
             return
 
-        path = Path('..') / self.config
+        path = Path(self.config)
         is_local = path.is_file()
         if is_local:
             config_content = path.read_text()

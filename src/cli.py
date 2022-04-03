@@ -1,8 +1,9 @@
 import argparse
+import random
 from multiprocessing import cpu_count
 
-from core import THREADS_PER_CORE, MAX_DEFAULT_THREADS
-from mhddos import Methods
+from .core import THREADS_PER_CORE, MAX_DEFAULT_THREADS
+from .mhddos import Methods
 
 
 def init_argparse() -> argparse.ArgumentParser:
@@ -22,7 +23,7 @@ def init_argparse() -> argparse.ArgumentParser:
         '--threads',
         type=int,
         default=min(THREADS_PER_CORE * cpu_count(), MAX_DEFAULT_THREADS),
-        help='Total number of threads to run (default is CPU * 1000)',
+        help=f'Total number of threads to run (default is CPU * {THREADS_PER_CORE})',
     )
     parser.add_argument(
         '-p',
@@ -60,14 +61,19 @@ def init_argparse() -> argparse.ArgumentParser:
         '--http-methods',
         nargs='+',
         type=str.upper,
-        default=['GET', 'POST', 'STRESS', 'BOT', 'PPS'],
+        default=['GET', random.choice(['POST', 'STRESS'])],
         choices=Methods.LAYER7_METHODS,
-        help='List of HTTP(s) attack methods to use. Default is GET, POST, STRESS, BOT, PPS',
+        help='List of HTTP(s) attack methods to use. Default is GET + POST|STRESS',
     )
     parser.add_argument(
         '--proxy-timeout',
         type=float,
         default=5,
         help='How many seconds to wait for the proxy to make a connection (default is 5)'
+    )
+    parser.add_argument(
+        '--itarmy',
+        action='store_true',
+        default=False,
     )
     return parser
