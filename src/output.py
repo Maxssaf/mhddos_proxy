@@ -7,13 +7,6 @@ from .core import cl, logger, THREADS_PER_CORE
 from .mhddos import Tools
 
 
-# @formatter:off
-if os.name == 'nt':
-    import colorama
-    colorama.init()
-# @formatter:on
-
-
 def cls():
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -58,7 +51,8 @@ def show_statistic(statistics, refresh_rate, table, vpn_mode, proxies_cnt, perio
             ))
         else:
             logger.info(
-                f'{cl.YELLOW}Ціль:{cl.BLUE} %s,{cl.YELLOW} Порт:{cl.BLUE} %s,{cl.YELLOW} Метод:{cl.BLUE} %s{cl.YELLOW} Потоків:{cl.BLUE} %s{cl.YELLOW} PPS:{cl.BLUE} %s,{cl.YELLOW} BPS:{cl.BLUE} %s{cl.RESET}' %
+                f'{cl.YELLOW}Ціль:{cl.BLUE} %s,{cl.YELLOW} Порт:{cl.BLUE} %s,{cl.YELLOW} Метод:{cl.BLUE} %s{cl.YELLOW}'
+                f' Потоків:{cl.BLUE} %s{cl.YELLOW} PPS:{cl.BLUE} %s,{cl.YELLOW} BPS:{cl.BLUE} %s{cl.RESET}' %
                 (
                     k.url.host,
                     k.url.port,
@@ -85,11 +79,11 @@ def show_statistic(statistics, refresh_rate, table, vpn_mode, proxies_cnt, perio
 
 
 def print_progress(period, passed, proxies_cnt):
-    logger.info(f'{cl.GREEN}Новий цикл через: {round(period - passed)} секунд{cl.RESET}')
+    logger.info(f'{cl.YELLOW}Новий цикл через: {cl.BLUE}{round(period - passed)} секунд{cl.RESET}')
     if proxies_cnt:
-        logger.info(f'{cl.GREEN}Кількість проксі: {proxies_cnt}{cl.RESET}')
+        logger.info(f'{cl.YELLOW}Кількість проксі: {cl.BLUE}{proxies_cnt}{cl.RESET}')
     else:
-        logger.info(f'{cl.GREEN}Атака без проксі - переконайтеся що ви анонімні{cl.RESET}')
+        logger.info(f'{cl.YELLOW}Атака без проксі - переконайтеся що ви анонімні{cl.RESET}')
 
 
 def print_banner(vpn_mode):

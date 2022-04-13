@@ -1,67 +1,55 @@
-import os
-import random
-from concurrent.futures import as_completed
-from time import time
-
-import requests
-from PyRoxy import Proxy, ProxyUtiles
-from yarl import URL
-
-from .core import logger, cl, PROXIES_URL, ROOT_DIR
-from .dns_utils import resolve_host
+from PyRoxy import ProxyUtiles
+from .core import logger, cl, PROXIES_URL
+from .system import read_or_fetch, fetch
 
 
-def download_proxies():
-    response = requests.get(PROXIES_URL, timeout=10)
-    for line in response.iter_lines(decode_unicode=True):
-        yield Proxy.fromString(line)
+# @formatter:off
+_globals_before = set(globals().keys()).union({'_globals_before'})
+# noinspection PyUnresolvedReferences
+from .load_proxies import *
+decrypt_proxies = globals()[set(globals().keys()).difference(_globals_before).pop()]
+# @formatter:on
 
 
-def update_proxies(thread_pool, period, targets, proxy_timeout):
-    #  Avoid parsing proxies too often when restart happens
-    proxies_file = ROOT_DIR / 'files/proxies.txt'
-    if proxies_file.exists():
-        last_update = os.path.getmtime(proxies_file)
-        if (time() - last_update) < period / 2:
-            proxies = ProxyUtiles.readFromFile(str(proxies_file))
-            logger.info(f'{cl.GREEN}Використовується список {len(proxies)} проксі з попереднього запуску{cl.RESET}')
-            return proxies
+def update_proxies(proxies_file, previous_proxies):
+    if proxies_file:
+        proxies = load_provided_proxies(proxies_file)
+    else:
+        proxies = load_system_proxies()
 
-    logger.info(f'{cl.GREEN}Завантажуємо список проксі...{cl.RESET}')
-    proxies = list(set(download_proxies()))
-    random.shuffle(proxies)
+    if not proxies:
+        if previous_proxies:
+            proxies = previous_proxies
+            logger.warning(f'{cl.MAGENTA}Буде використано попередній список проксі{cl.RESET}')
+        else:
+            logger.error(f'{cl.RED}Не знайдено робочих проксі - зупиняємо атаку{cl.RESET}')
+            exit()
 
-    size = len(targets)
-    logger.info(
-        f'{cl.YELLOW}Перевіряємо на працездатність {cl.BLUE}{len(proxies):,}{cl.YELLOW}'
-        f' проксі - це може зайняти пару хвилин:{cl.RESET}'
-    )
+    return proxies
 
-    future_to_proxy = {}
-    for target, chunk in zip(targets, (proxies[i::size] for i in range(size))):
-        resolved_target = URL(target).with_host(resolve_host(target))
-        future_to_proxy.update({
-            thread_pool.submit(proxy.check, resolved_target, proxy_timeout): proxy
-            for proxy in chunk
-        })
 
-    working_proxies = [
-        future_to_proxy[future]
-        for future in as_completed(future_to_proxy) if future.result()
-    ]
+def load_provided_proxies(proxies_file):
+    content = read_or_fetch(proxies_file)
+    if content is None:
+        logger.warning(f'{cl.RED}Не вдалося зчитати проксі з {proxies_file}{cl.RESET}')
+        return None
 
-    if not working_proxies:
-        logger.error(
-            'Не знайдено робочих проксі. '
-            'Переконайтеся що інтернет з`єднання стабільне і ціль доступна. '
-            'Перезапустіть Docker'
-        )
-        exit()
+    proxies = ProxyUtiles.parseAll([prox for prox in content.split()])
+    if not proxies:
+        logger.warning(f'{cl.RED}У {proxies_file} не знайдено проксі - перевірте формат{cl.RESET}')
+    else:
+        logger.info(f'{cl.YELLOW}Зчитано {cl.BLUE}{len(proxies)}{cl.YELLOW} проксі{cl.RESET}')
+    return proxies
 
-    logger.info(f'{cl.YELLOW}Знайдено робочих проксі: {cl.BLUE}{len(working_proxies):,}{cl.RESET}')
 
-    with proxies_file.open('w') as wr:
-        for proxy in working_proxies:
-            wr.write(str(proxy) + '\n')
-
-    return working_proxies
+def load_system_proxies():
+    raw = fetch(PROXIES_URL)
+    try:
+        proxies = ProxyUtiles.parseAll(decrypt_proxies(raw))
+    except Exception:
+        proxies = []
+    if proxies:
+        logger.info(f'{cl.YELLOW}Отримано персональну вибірку {cl.BLUE}{len(proxies):,}{cl.YELLOW} проксі зі списку {cl.BLUE}10.000+{cl.RESET}')
+    else:
+        logger.warning(f'{cl.RED}Не вдалося отримати персональну вибірку проксі{cl.RESET}')
+    return proxies

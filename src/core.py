@@ -10,14 +10,13 @@ logger.setLevel('INFO')
 
 ROOT_DIR = Path(__file__).parent.parent
 
-PROXIES_URL = 'https://raw.githubusercontent.com/porthole-ascend-cinnamon/proxy_scraper/main/proxies.txt'
+PROXIES_URL = 'https://raw.githubusercontent.com/porthole-ascend-cinnamon/proxy_scraper/main/working_proxies.txt'
 IT_ARMY_CONFIG_URL = 'https://gist.githubusercontent.com/ddosukraine2022/f739250dba308a7a2215617b17114be9/raw/mhdos_targets_tcp.txt'
 
-PROXY_TIMEOUT = 5
 UDP_THREADS = 1
 LOW_RPC = 1000
 
-THREADS_PER_CORE = 800
+THREADS_PER_CORE = 1000
 MAX_DEFAULT_THREADS = 4000
 
 

